@@ -284,9 +284,39 @@
       UNI: "0xb33EaAd8d922B1083446DC23f610c2567fB5180f"
     };
 
-    const usdcAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"; // 🟢 1. USDC.e
+    const usdcAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
     const quickSwapRouter = new ethers.Contract("0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff", ["function getAmountsOut(uint256, address[]) view returns (uint256[])"]);
     const sushiSwapRouter = new ethers.Contract("0x1b02da8cb0d097eb8d57a175b88c7d8b47997506", ["function getAmountsOut(uint256, address[]) view returns (uint256[])"]);
+
+    document.getElementById("connectWallet").onclick = async () => {
+      provider = new ethers.providers.Web3Provider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      signer = provider.getSigner();
+      const walletAddress = await signer.getAddress();
+      document.getElementById("wallet").textContent = walletAddress;
+      contract = new ethers.Contract(contractAddress, contractABI, signer);
+      log("✅ Wallet connected: " + walletAddress);
+      await updateAllBalances();
+    };
+
+    async function updateAllBalances() {
+      const usdc = new ethers.Contract(usdcAddress, ["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)"], provider);
+      const decimals = await usdc.decimals();
+      const walletBal = await usdc.balanceOf(await signer.getAddress());
+      const contractBal = await usdc.balanceOf(contractAddress);
+
+      document.getElementById("walletBalance").textContent = (walletBal / 10 ** decimals).toFixed(4);
+      document.getElementById("contractBalance").textContent = (contractBal / 10 ** decimals).toFixed(4);
+
+      let html = '';
+      for (const [symbol, addr] of Object.entries(tokens)) {
+        const token = new ethers.Contract(addr, ["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)"], provider);
+        const bal = await token.balanceOf(contractAddress);
+        const dec = await token.decimals();
+        html += `<div class="token-balance">${symbol}: ${(bal / 10 ** dec).toFixed(4)}</div>`;
+      }
+      document.getElementById("tokenBalances").innerHTML = html;
+    }
 
     async function runBatch() {
       const autoTrade = document.getElementById("autoTradeToggle").checked;
@@ -297,7 +327,7 @@
         const tokenSymbol = tokenKeys[i % tokenKeys.length];
         const tokenAddr = tokens[tokenSymbol];
 
-        const amountIn = ethers.utils.parseUnits("10", 6); // 🟢 1. USDC.e amount
+        const amountIn = ethers.utils.parseUnits("10", 6);
         let buyOut, sellOut;
 
         try {
@@ -308,7 +338,7 @@
           continue;
         }
 
-        const buyPrice = amountIn / buyOut[1]; // USDC per token
+        const buyPrice = amountIn / buyOut[1];
         const sellPrice = sellOut[1] / buyOut[1];
         const profitUsd = (sellOut[1] - amountIn) / 1e6;
         const profitPct = (profitUsd / (amountIn / 1e6)) * 100;
@@ -323,3 +353,4 @@
   </script>
 </body>
 </html>
+
